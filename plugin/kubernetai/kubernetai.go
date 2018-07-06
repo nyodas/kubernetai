@@ -87,25 +87,26 @@ func (k8i Kubernetai) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 
 // AutoPath routes AutoPath requests to the authoritative kubernetes.
 func (k8i Kubernetai) AutoPath(state request.Request) []string {
-	var searchPath []string
-	for _, k := range k8i.Kubernetes {
-		zones := make([]string, 0, len(k.Zones)*2)
-		zones = append(zones, k.Zones...)
-		for _, z := range k.Zones {
-			if !strings.HasPrefix(z, "svc.") {
-				zones = append(zones, "svc."+z)
-			}
-		}
-		zone := plugin.Zones(zones).Matches(state.Name())
+	var allpaths [][]string
+	first := 0
+	for i, k := range k8i.Kubernetes {
+		zone := plugin.Zones(k.Zones).Matches(state.Name())
 		if zone != "" {
-			searchPath = append([]string{zone}, searchPath...)
+			first = i
 		}
-		searchPath = append(searchPath, zones...)
+		allpaths = append(allpaths, k.AutoPath(state))
 	}
 
-	searchPath = append(searchPath, "")
-	log.Debugf("Autopath search path for '%s' will be '%v'", state.Name(), searchPath)
-	return searchPath
+	path := allpaths[first]
+	for i, p := range allpaths {
+		if i == first {
+			continue
+		}
+		path = append(path, p...)
+
+	}
+	log.Debugf("Autopath search path for '%s' will be '%v'", state.Name(), path)
+	return path
 }
 
 // Federations routes Federations requests to the authoritative kubernetes.
